@@ -3,13 +3,17 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"time"
+
 	"github.com/authzed/authzed-go/v1"
 	"github.com/jackc/pgx/v5"
 	"github.com/merlante/inventory-access-poc/api"
-	"net/http"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type ContentServer struct {
+	Tracer        trace.Tracer
 	SpicedbClient *authzed.Client
 	PostgresConn  *pgx.Conn
 }
@@ -42,11 +46,21 @@ func (p Package) VisitGetContentPackagesResponse(w http.ResponseWriter) error {
 	return nil
 }
 
-func (*ContentServer) GetContentPackages(ctx context.Context, request api.GetContentPackagesRequestObject) (api.GetContentPackagesResponseObject, error) {
+func (c *ContentServer) GetContentPackages(ctx context.Context, request api.GetContentPackagesRequestObject) (api.GetContentPackagesResponseObject, error) {
 	// Next:
 	// - query from postgres
 	// - join with spicedb data
 	// - return results
+	ctx, span := c.Tracer.Start(ctx, "GetContentPackages")
+	defer span.End()
+
+	_, spiceSpan := c.Tracer.Start(ctx, "SpiceDB pre-filter call")
+	time.Sleep(time.Second) // mimics the delay calling out to SpiceDB
+	spiceSpan.End()
+
+	_, pgSpan := c.Tracer.Start(ctx, "Postgres query")
 	p := Package{NameId: 123, Evra: "1-2", DescriptionHash: "Testing", SummaryHash: "FooBar", AdvisoryId: 321, Synced: false}
+	pgSpan.End()
+
 	return p, nil
 }
